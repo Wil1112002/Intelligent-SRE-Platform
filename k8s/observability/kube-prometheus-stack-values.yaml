@@ -1,0 +1,82 @@
+# Helm values for kube-prometheus-stack
+# Install: helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+#   -n monitoring --create-namespace -f kube-prometheus-stack-values.yaml
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+
+    # Scrape all ServiceMonitors across namespaces
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+    podMonitorNamespaceSelector: {}
+    podMonitorSelector: {}
+    ruleNamespaceSelector: {}
+    ruleSelector: {}
+
+grafana:
+  enabled: true
+  adminPassword: "sre-admin-changeme"
+  persistence:
+    enabled: true
+    size: 5Gi
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    hosts:
+      - grafana.sre.local
+
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      jsonData:
+        maxLines: 1000
+
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: monitoring
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 2Gi
+
+# Default rules — keep most enabled
+defaultRules:
+  create: true
+  rules:
+    alertmanager: true
+    etcd: false  # Not applicable to EKS managed control plane
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+
+# Disable components not relevant for EKS managed control plane
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false

@@ -1,0 +1,34 @@
+# Helm values for Promtail (grafana/promtail chart)
+# Install: helm install promtail grafana/promtail -n monitoring -f promtail-values.yaml
+
+config:
+  clients:
+    - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+
+  snippets:
+    pipelineStages:
+      - cri: {}
+      - json:
+          expressions:
+            level: level
+            msg: msg
+      - labels:
+          level:
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+serviceMonitor:
+  enabled: true
+  labels:
+    release: kube-prometheus-stack

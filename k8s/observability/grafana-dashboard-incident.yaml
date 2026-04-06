@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-incident
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  incident-view.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 2,
+      "links": [],
+      "panels": [
+        {
+          "title": "Error Rate (api-service)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(error_count_total{endpoint=\"/process\"}[1m])) / sum(rate(request_count_total{endpoint=\"/process\"}[1m])) * 100",
+              "legendFormat": "error rate %",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": { "drawStyle": "line", "fillOpacity": 15, "gradientMode": "scheme" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 5 },
+                  { "color": "red", "value": 15 }
+                ]
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "title": "Error Rate (worker-service)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(job_count_total{status=\"error\"}[1m])) / sum(rate(job_count_total[1m])) * 100",
+              "legendFormat": "error rate %",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "custom": { "drawStyle": "line", "fillOpacity": 15, "gradientMode": "scheme" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 5 },
+                  { "color": "red", "value": 15 }
+                ]
+              }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "title": "Error Logs (api-service)",
+          "type": "logs",
+          "gridPos": { "h": 10, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{app=\"api-service\"} |= \"error\" or {app=\"api-service\"} |= \"500\"",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "sortOrder": "Descending"
+          }
+        },
+        {
+          "title": "Error Logs (worker-service)",
+          "type": "logs",
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "datasource": { "type": "loki", "uid": "loki" },
+              "expr": "{app=\"worker-service\"} |= \"error\" or {app=\"worker-service\"} |= \"panic\"",
+              "refId": "A"
+            }
+          ],
+          "options": {
+            "showTime": true,
+            "showLabels": false,
+            "showCommonLabels": false,
+            "wrapLogMessage": true,
+            "prettifyLogMessage": false,
+            "enableLogDetails": true,
+            "sortOrder": "Descending"
+          }
+        },
+        {
+          "title": "p99 Latency",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(request_latency_seconds_bucket[5m])) by (le))",
+              "legendFormat": "api-service p99",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(job_duration_seconds_bucket[5m])) by (le))",
+              "legendFormat": "worker-service p99",
+              "refId": "B"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": { "drawStyle": "line", "fillOpacity": 10 }
+            },
+            "overrides": []
+          }
+        },
+        {
+          "title": "Pod Restarts",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+          "targets": [
+            {
+              "expr": "sum(increase(kube_pod_container_status_restarts_total{namespace=~\"default|sre-agent\"}[1h])) by (pod)",
+              "legendFormat": "{{ pod }}",
+              "refId": "A"
+            }
+          ],
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 3 }
+                ]
+              }
+            },
+            "overrides": []
+          }
+        }
+      ],
+      "schemaVersion": 39,
+      "tags": ["sre", "incidents"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "Incident View",
+      "uid": "sre-incident-view"
+    }

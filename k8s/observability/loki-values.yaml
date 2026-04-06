@@ -1,0 +1,72 @@
+# Helm values for Loki (grafana/loki chart)
+# Install: helm install loki grafana/loki -n monitoring -f loki-values.yaml
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: s3
+    s3:
+      endpoint: ""  # Uses default AWS endpoint
+      region: us-east-1
+      bucketnames: intelligent-sre-loki-logs
+      insecure: false
+      sse_encryption: false
+    bucketNames:
+      chunks: intelligent-sre-loki-logs
+      ruler: intelligent-sre-loki-logs
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: s3
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+
+  limits_config:
+    retention_period: 168h  # 7 days
+    max_query_length: 721h
+    max_query_parallelism: 2
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Disable components not needed in single binary mode
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# Gateway
+gateway:
+  enabled: false
+
+# Monitoring
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false
+
+# Tests
+test:
+  enabled: false

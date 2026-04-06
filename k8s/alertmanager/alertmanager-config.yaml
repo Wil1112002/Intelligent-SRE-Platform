@@ -1,0 +1,56 @@
+# Alertmanager configuration
+# This is applied via the kube-prometheus-stack values or as an AlertmanagerConfig CRD.
+# Below is the raw Alertmanager config for reference / override.
+
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: sre-platform-routing
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  route:
+    groupBy: ["alertname", "severity"]
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 4h
+    receiver: ai-agent-webhook
+    routes:
+      # Critical alerts go to webhook immediately
+      - matchers:
+          - name: severity
+            value: critical
+            matchType: "="
+        receiver: ai-agent-webhook
+        groupWait: 10s
+        repeatInterval: 1h
+
+      # Warning alerts also go to webhook
+      - matchers:
+          - name: severity
+            value: warning
+            matchType: "="
+        receiver: ai-agent-webhook
+        groupWait: 30s
+        repeatInterval: 4h
+
+  receivers:
+    # Primary: AI triage agent webhook
+    - name: ai-agent-webhook
+      webhookConfigs:
+        - url: "http://ai-agent.sre-agent.svc.cluster.local:8000/webhook"
+          sendResolved: true
+
+    # Secondary: Slack (optional — fill in webhook URL to enable)
+    # - name: slack-notifications
+    #   slackConfigs:
+    #     - apiURL:
+    #         name: slack-webhook-url
+    #         key: url
+    #       channel: "#sre-alerts"
+    #       title: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}'
+    #       text: >-
+    #         *Severity:* {{ .CommonLabels.severity }}
+    #         *Description:* {{ .CommonAnnotations.description }}
+    #       sendResolved: true

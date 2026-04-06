@@ -1,0 +1,90 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sre-platform-alerts
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: sre-platform.rules
+      rules:
+        # HighErrorRate: error rate > 5% over 2m
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(error_count_total[2m])) by (endpoint)
+              /
+              sum(rate(request_count_total[2m])) by (endpoint)
+            ) > 0.05
+          for: 2m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "High error rate detected on {{ $labels.endpoint }}"
+            description: "Error rate is {{ $value | humanizePercentage }} over the last 2 minutes."
+            runbook_url: "docs/runbooks/high-error-rate.md"
+
+        # VeryHighErrorRate: error rate > 15% over 2m
+        - alert: VeryHighErrorRate
+          expr: |
+            (
+              sum(rate(error_count_total[2m])) by (endpoint)
+              /
+              sum(rate(request_count_total[2m])) by (endpoint)
+            ) > 0.15
+          for: 2m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "Very high error rate on {{ $labels.endpoint }}"
+            description: "Error rate is {{ $value | humanizePercentage }} over the last 2 minutes. Immediate action required."
+            runbook_url: "docs/runbooks/high-error-rate.md"
+
+        # HighLatency: p99 latency > 1s over 5m
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(request_latency_seconds_bucket[5m])) by (le, endpoint))
+            > 1.0
+          for: 5m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "High p99 latency on {{ $labels.endpoint }}"
+            description: "p99 latency is {{ $value | humanizeDuration }} over the last 5 minutes."
+
+        # PodCrashLooping: pod restarts > 3 in 10m
+        - alert: PodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total[10m]) > 3
+          for: 0m
+          labels:
+            severity: critical
+            team: sre
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+            description: "Pod has restarted {{ $value | humanize }} times in the last 10 minutes."
+            runbook_url: "docs/runbooks/pod-crashloop.md"
+
+        # MemoryLeak: memory_usage_bytes growing > 20% over 10m
+        - alert: MemoryLeak
+          expr: |
+            (
+              memory_usage_bytes
+              -
+              memory_usage_bytes offset 10m
+            )
+            /
+            (memory_usage_bytes offset 10m > 0)
+            > 0.20
+          for: 10m
+          labels:
+            severity: warning
+            team: sre
+          annotations:
+            summary: "Possible memory leak detected in worker-service"
+            description: "memory_usage_bytes has grown by more than 20% over the last 10 minutes. Current value: {{ $value | humanize }}B."
+            runbook_url: "docs/runbooks/memory-leak.md"
