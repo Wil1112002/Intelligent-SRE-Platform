@@ -1,0 +1,39 @@
+replicaCount: 2
+
+image:
+  repository: "" # Set to your ECR repo URI
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 250m
+    memory: 512Mi # Higher limit to observe memory leak behavior
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+metrics:
+  enabled: true
+  port: 8000
+  path: /metrics
+
+ingress:
+  enabled: true
+  className: nginx
+  host: worker.sre.local

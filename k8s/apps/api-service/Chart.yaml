@@ -1,0 +1,6 @@
+apiVersion: v2
+name: api-service
+description: FastAPI sample service for the SRE platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
