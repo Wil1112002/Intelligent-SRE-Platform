@@ -1,0 +1,42 @@
+replicaCount: 1
+
+image:
+  repository: "" # Set to your ECR repo URI
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+namespace: sre-agent
+
+service:
+  type: ClusterIP
+  port: 8000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+env:
+  SRE_AGENT_PROMETHEUS_URL: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+  SRE_AGENT_LOKI_URL: "http://loki.monitoring.svc.cluster.local:3100"
+  SRE_AGENT_DB_PATH: "/data/incidents.db"
+  SRE_AGENT_REMEDIATION_ENABLED: "true"
+  SRE_AGENT_REMEDIATION_NAMESPACE: "default"
+  SRE_AGENT_IN_CLUSTER: "true"
+  SRE_AGENT_CLAUDE_MODEL: "claude-sonnet-4-20250514"
+
+# Reference to ExternalSecret or K8s Secret for the API key
+anthropicApiKeySecret:
+  name: anthropic-api-key
+  key: api-key
+
+persistence:
+  enabled: true
+  size: 1Gi
+
+# RBAC scoped to default namespace
+rbac:
+  targetNamespace: default
