@@ -9,18 +9,18 @@ graph TB
     subgraph AWS
         subgraph VPC
             subgraph EKS Cluster
-                subgraph default namespace
+                subgraph ns-default ["default namespace"]
                     API[api-service]
                     Worker[worker-service]
                 end
-                subgraph monitoring namespace
+                subgraph ns-monitoring ["monitoring namespace"]
                     Prom[Prometheus]
                     Graf[Grafana]
                     Loki[Loki]
                     PT[Promtail]
                     AM[Alertmanager]
                 end
-                subgraph sre-agent namespace
+                subgraph ns-sre-agent ["sre-agent namespace"]
                     Agent[AI Triage Agent]
                     DB[(SQLite)]
                 end
