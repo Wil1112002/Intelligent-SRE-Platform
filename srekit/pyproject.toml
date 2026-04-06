@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "srekit"
+version = "0.1.0"
+description = "CLI toolkit for the Intelligent SRE Platform"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+    "httpx>=0.27.0",
+    "kubernetes>=29.0.0",
+    "anthropic>=0.49.0",
+]
+
+[project.scripts]
+srekit = "srekit.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
