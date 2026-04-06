@@ -1,0 +1,91 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  build-and-push:
+    name: Build & Push
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: api-service
+            context: services/api-service
+          - name: worker-service
+            context: services/worker-service
+          - name: ai-agent
+            context: ai-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          REPO="${{ env.ECR_REGISTRY }}/${{ matrix.service.name }}"
+
+          docker build -t ${REPO}:${IMAGE_TAG} -t ${REPO}:latest ${{ matrix.service.context }}
+          docker push ${REPO}:${IMAGE_TAG}
+          docker push ${REPO}:latest
+
+    outputs:
+      image_tag: ${{ github.sha }}
+
+  update-helm-values:
+    name: Update Helm Values
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update image tags in Helm values
+        run: |
+          IMAGE_TAG="${{ github.sha }}"
+          REGISTRY="${{ env.ECR_REGISTRY }}"
+
+          # Update api-service
+          sed -i "s|repository: .*# Set to your ECR repo URI|repository: ${REGISTRY}/api-service # Set to your ECR repo URI|" \
+            k8s/apps/api-service/values.yaml
+          sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" \
+            k8s/apps/api-service/values.yaml
+
+          # Update worker-service
+          sed -i "s|repository: .*# Set to your ECR repo URI|repository: ${REGISTRY}/worker-service # Set to your ECR repo URI|" \
+            k8s/apps/worker-service/values.yaml
+          sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" \
+            k8s/apps/worker-service/values.yaml
+
+          # Update ai-agent
+          sed -i "s|repository: .*# Set to your ECR repo URI|repository: ${REGISTRY}/ai-agent # Set to your ECR repo URI|" \
+            k8s/apps/ai-agent/values.yaml
+          sed -i "s|tag: .*|tag: \"${IMAGE_TAG}\"|" \
+            k8s/apps/ai-agent/values.yaml
+
+      - name: Commit updated values
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add k8s/apps/*/values.yaml
+          git diff --staged --quiet || git commit -m "ci: update image tags to ${{ github.sha }}"
+          git push

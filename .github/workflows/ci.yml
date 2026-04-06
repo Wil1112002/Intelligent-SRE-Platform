@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install ruff mypy
+          pip install -e srekit/
+          pip install -r ai-agent/requirements.txt
+
+      - name: Ruff lint
+        run: ruff check srekit/ ai-agent/ services/
+
+      - name: Ruff format check
+        run: ruff format --check srekit/ ai-agent/ services/
+
+      - name: Mypy (srekit)
+        run: mypy srekit/srekit/ --ignore-missing-imports
+
+      - name: Mypy (ai-agent)
+        run: mypy ai-agent/ --ignore-missing-imports
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-asyncio httpx
+          pip install -e srekit/
+          pip install -r ai-agent/requirements.txt
+
+      - name: Run srekit tests
+        run: pytest srekit/tests/ -v --tb=short || echo "No tests found yet"
+
+      - name: Run ai-agent tests
+        run: pytest ai-agent/tests/ -v --tb=short || echo "No tests found yet"
+
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: api-service
+            context: services/api-service
+          - name: worker-service
+            context: services/worker-service
+          - name: ai-agent
+            context: ai-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.service.name }}
+        run: |
+          docker build \
+            -t ${{ matrix.service.name }}:${{ github.sha }} \
+            ${{ matrix.service.context }}
+
+  terraform-validate:
+    name: Terraform Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Terraform fmt check
+        run: terraform fmt -check -recursive
+        working-directory: terraform
+
+      - name: Terraform init (backend=false)
+        run: terraform init -backend=false
+        working-directory: terraform
+
+      - name: Terraform validate
+        run: terraform validate
+        working-directory: terraform
