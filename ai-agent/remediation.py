@@ -19,6 +19,10 @@ def _get_apps_client() -> client.AppsV1Api:
 def restart_deployment(name: str, namespace: str | None = None) -> str:
     """Perform a rollout restart on a deployment."""
     ns = namespace or settings.remediation_namespace
+    if not settings.remediation_auto_execute:
+        msg = f"DRY RUN: would restart deployment/{name} in {ns}"
+        logger.info(msg)
+        return msg
     try:
         apps = _get_apps_client()
         # Patch the deployment with a restart annotation to trigger rollout
@@ -48,6 +52,10 @@ def restart_deployment(name: str, namespace: str | None = None) -> str:
 def scale_deployment(name: str, delta: int = 1, namespace: str | None = None) -> str:
     """Scale a deployment up by delta replicas."""
     ns = namespace or settings.remediation_namespace
+    if not settings.remediation_auto_execute:
+        msg = f"DRY RUN: would scale deployment/{name} by {delta:+d} replicas in {ns}"
+        logger.info(msg)
+        return msg
     try:
         apps = _get_apps_client()
         deployment = apps.read_namespaced_deployment(name, ns)

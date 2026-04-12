@@ -2,7 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException, status
 from pydantic import BaseModel
 
 from config import settings
@@ -27,6 +27,35 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     init_db(settings.db_path)
     logger.info("Database initialized at %s", settings.db_path)
+
+    # Startup validation for the Claude API key — fail loud, not at first request.
+    if not settings.anthropic_api_key:
+        logger.error(
+            "SRE_AGENT_ANTHROPIC_API_KEY is not set. Triage calls will fail. "
+            "Set the env var or update config before receiving alerts."
+        )
+    else:
+        logger.info("Anthropic API key is configured (model=%s)", settings.claude_model)
+
+    # Warn loudly if the webhook is unauthenticated — acceptable for local dev only.
+    if not settings.webhook_token:
+        logger.warning(
+            "SRE_AGENT_WEBHOOK_TOKEN is not set — /webhook is UNAUTHENTICATED. "
+            "Set this in production to require a shared-secret header."
+        )
+    else:
+        logger.info("Webhook authentication is enabled")
+
+    # Log remediation mode so operators can see it in the startup banner.
+    if settings.remediation_enabled and settings.remediation_auto_execute:
+        logger.warning(
+            "Remediation auto-execute is ENABLED — the agent will patch deployments unattended."
+        )
+    elif settings.remediation_enabled:
+        logger.info("Remediation is enabled in DRY RUN mode (auto_execute=False)")
+    else:
+        logger.info("Remediation is disabled")
+
     yield
 
 
@@ -63,6 +92,32 @@ class AlertmanagerPayload(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+def _verify_webhook_token(
+    authorization: str | None,
+    x_webhook_token: str | None,
+) -> None:
+    """Check the webhook shared secret from either `Authorization: Bearer ...`
+    or `X-Webhook-Token: ...`. If no token is configured, auth is skipped
+    (a startup warning is emitted in that case)."""
+    expected = settings.webhook_token
+    if not expected:
+        return
+
+    provided: str | None = x_webhook_token
+    if authorization and authorization.lower().startswith("bearer "):
+        provided = authorization.split(" ", 1)[1].strip()
+
+    if provided != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing webhook token",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -72,8 +127,14 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/webhook")
-async def webhook(payload: AlertmanagerPayload) -> dict[str, Any]:
+async def webhook(
+    payload: AlertmanagerPayload,
+    authorization: str | None = Header(default=None),
+    x_webhook_token: str | None = Header(default=None),
+) -> dict[str, Any]:
     """Receive Alertmanager webhook, triage each alert, and return results."""
+    _verify_webhook_token(authorization, x_webhook_token)
+
     results: list[dict[str, Any]] = []
 
     for alert in payload.alerts:

@@ -17,7 +17,16 @@ class Settings(BaseSettings):
 
     # Remediation
     remediation_enabled: bool = True
+    # When False, remediation is dry-run: the agent logs and records what *would* have
+    # happened but does not patch any Kubernetes resources. Flip to True only when
+    # you are comfortable with the agent restarting/scaling deployments unattended.
+    remediation_auto_execute: bool = False
     remediation_namespace: str = "default"
+
+    # Webhook authentication. If set, requests to /webhook must present this token via
+    # the `Authorization: Bearer <token>` or `X-Webhook-Token: <token>` header.
+    # If empty, the webhook is unauthenticated (local dev only — a warning is logged).
+    webhook_token: str = ""
 
     # Kubernetes
     in_cluster: bool = True

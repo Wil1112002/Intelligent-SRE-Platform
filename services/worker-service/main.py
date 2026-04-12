@@ -7,7 +7,10 @@ from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTEN
 
 app = FastAPI(title="worker-service", version="1.0.0")
 
-# Simulated memory leak storage
+# Simulated memory leak storage.
+# Capped so the simulated leak plateaus well before the container OOMs —
+# it still climbs fast enough to fire the memory alert, but won't crash the pod.
+_LEAK_CAP_BYTES = 100 * 1024 * 1024  # 100 MB
 _leak_store: list[bytes] = []
 
 # Prometheus metrics
@@ -40,8 +43,9 @@ async def run_job() -> dict[str, str | float] | Response:
     delay = random.uniform(0.1, 0.8)
     await asyncio.sleep(delay)
 
-    # Gradual memory growth to simulate a leak (~1KB per request)
-    _leak_store.append(b"\x00" * 1024)
+    # Gradual memory growth to simulate a leak (~1KB per request), capped for safety.
+    if len(_leak_store) * 1024 < _LEAK_CAP_BYTES:
+        _leak_store.append(b"\x00" * 1024)
     MEMORY_USAGE.set(len(_leak_store) * 1024)
 
     duration = time.perf_counter() - start

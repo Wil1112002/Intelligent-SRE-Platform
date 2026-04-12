@@ -6,6 +6,9 @@ from config import settings
 
 logger = logging.getLogger(__name__)
 
+# Module-level singleton — reused across requests so we share the connection pool.
+_client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+
 TRIAGE_PROMPT = """You are an SRE assistant. An alert has fired in production.
 
 Alert: {alert_name}
@@ -52,8 +55,7 @@ async def triage_alert(
     )
 
     try:
-        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-        message = await client.messages.create(
+        message = await _client.messages.create(
             model=settings.claude_model,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
@@ -79,8 +81,6 @@ async def triage_alert(
 
 def _parse_triage_response(text: str) -> tuple[str, str]:
     """Split Claude's response into root cause and recommendation sections."""
-    sections = text.split("\n\n")
-
     root_cause = ""
     recommendation = ""
     current_section = ""

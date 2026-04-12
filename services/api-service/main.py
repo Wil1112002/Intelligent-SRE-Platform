@@ -33,7 +33,7 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/process")
-async def process() -> dict[str, str | float]:
+async def process() -> dict[str, str | float] | Response:
     start = time.perf_counter()
 
     # Simulate work: random sleep 50-500ms

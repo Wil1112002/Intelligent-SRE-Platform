@@ -39,10 +39,11 @@ async def query_prometheus(
 
 async def get_error_rate(base_url: str, service: str) -> str:
     """Get error rate for a service over the last 30 minutes."""
-    # Try api-service style metrics first, then worker-service style
+    # Filter by the Prometheus `job` label, which is set from the scrape target name
+    # and matches the service name in our kube-prometheus-stack config.
     query = (
-        f'sum(rate(error_count_total{{endpoint=~".*"}}[30m])) '
-        f'/ sum(rate(request_count_total{{endpoint=~".*"}}[30m])) * 100'
+        f'sum(rate(error_count_total{{job="{service}"}}[30m])) '
+        f'/ sum(rate(request_count_total{{job="{service}"}}[30m])) * 100'
     )
     return await query_prometheus(base_url, query)
 
@@ -50,7 +51,7 @@ async def get_error_rate(base_url: str, service: str) -> str:
 async def get_p99_latency(base_url: str, service: str) -> str:
     """Get p99 latency for a service over the last 30 minutes."""
     query = (
-        'histogram_quantile(0.99, sum(rate(request_latency_seconds_bucket[30m])) by (le)) '
+        f'histogram_quantile(0.99, sum(rate(request_latency_seconds_bucket{{job="{service}"}}[30m])) by (le)) '
         '* 1000'
     )
     return await query_prometheus(base_url, query)
@@ -74,7 +75,7 @@ async def query_loki_errors(
         end_ns = int(now.timestamp() * 1e9)
         start_ns = end_ns - int(30 * 60 * 1e9)  # 30 minutes ago
 
-        query = f'{{app="{service}"}} |= "error" or {{app="{service}"}} |= "500"'
+        query = f'{{app="{service}"}} |~ "error|500"'
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.get(
